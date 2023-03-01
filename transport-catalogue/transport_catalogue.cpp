@@ -30,6 +30,19 @@ namespace transport_catalogue {
         for (auto stop : buses_.front().stops) {
             stop_and_stopping_buses_[stop->stop_name].insert(buses_.front().bus_name);
         }
+
+        for (int i = 0, j = 1; j < busname_to_bus_.at(bus)->stops.size(); ++i, ++j) {
+            Stop* const lhs = busname_to_bus_.at(bus)->stops[i];
+            Stop* const rhs = busname_to_bus_.at(bus)->stops[j];
+
+            busname_to_bus_.at(bus)->geographic_distance += ComputeDistance(lhs->coordinates, rhs->coordinates);
+
+            if (stops_distance_.count({lhs, rhs})) {
+                busname_to_bus_.at(bus)->route_length += stops_distance_.at({lhs, rhs});
+            } else if (stops_distance_.count({rhs, lhs})) {
+                busname_to_bus_.at(bus)->route_length += stops_distance_.at({rhs, lhs});
+            }
+        }
     }
 
     void TransportCatalogue::SetDistanceBetweenStops(std::tuple<std::string, int, std::string>& stop_distance_to_stop) {
@@ -38,42 +51,15 @@ namespace transport_catalogue {
     }
 
     TransportCatalogue::BusInfo TransportCatalogue::GetBusInfo(std::string_view bus) const {
-        int route_length = 0.;
-        double geographic_distance = 0.;
-
-        /* почему-то не работает :(
-        route_length = std::accumulate(busname_to_bus_.at(bus)->stops.begin(),
-                                       busname_to_bus_.at(bus)->stops.end(),
-                                       0.0,
-                                       [](Stop* const lhs, Stop* const rhs) {
-                                           return ComputeDistance(lhs->coordinates, rhs->coordinates);
-                                       });
-        */
-
         if (!busname_to_bus_.count(bus)) {
             throw std::logic_error("Bus not found");
-        }
-
-        for (int i = 0, j = 1; j < busname_to_bus_.at(bus)->stops.size(); ++i, ++j) {
-            Stop* const lhs = busname_to_bus_.at(bus)->stops[i];
-            Stop* const rhs = busname_to_bus_.at(bus)->stops[j];
-
-            double tmp_geographic_distance = ComputeDistance(lhs->coordinates, rhs->coordinates);
-
-            geographic_distance += tmp_geographic_distance;
-
-            if (stops_distance_.count({lhs, rhs})) {
-                route_length += stops_distance_.at({lhs, rhs});
-            } else if (stops_distance_.count({rhs, lhs})) {
-                route_length += stops_distance_.at({rhs, lhs});
-            }
         }
 
         return {busname_to_bus_.at(bus)->bus_name,
                 busname_to_bus_.at(bus)->stops.size(),
                 busname_to_bus_.at(bus)->unique_stops.size(),
-                route_length,
-                route_length / geographic_distance};
+                busname_to_bus_.at(bus)->route_length,
+                busname_to_bus_.at(bus)->route_length / busname_to_bus_.at(bus)->geographic_distance};
     }
 
     std::unordered_set<std::string_view> TransportCatalogue::GetStopInfo(std::string_view stop) const {
