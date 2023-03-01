@@ -26,6 +26,9 @@ namespace transport_catalogue {
             std::string bus_name;
             std::vector<Stop*> stops;
             std::unordered_set<std::string_view> unique_stops;
+
+            int route_length = 0;
+            double geographic_distance = 0.;
         };
 
         struct StopsDistanceHasher {
