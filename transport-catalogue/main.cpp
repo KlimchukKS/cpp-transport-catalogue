@@ -35,5 +35,5 @@ int main() {
             "Stop Samara\n"
             "Stop Prazhskaya\n"
             "Stop Biryulyovo Zapadnoye\n"};
-    transport_catalogue::stat_reader::ReadQueryAndOutInfo(input2, transport_catalogue);
+    transport_catalogue::stat_reader::ReadQueryAndOutInfo(std::cout, input2, transport_catalogue);
 }
