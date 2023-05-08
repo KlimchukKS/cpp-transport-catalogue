@@ -15,39 +15,37 @@ namespace transport_catalogue {
 
         namespace detail {
             void OutBusInfo(std::ostream& out, std::string_view bus, TransportCatalogue& transport_catalogue) {
-                try {
-                    auto [bus_name,
-                            stops_route,
-                            unique_stops,
-                            route_length,
-                            curvature] = transport_catalogue.GetBusInfo(bus);
-                    out << "Bus "s <<bus_name << ": "s
-                              << stops_route << " stops on route, "s
-                              << unique_stops << " unique stops, "s
-                              << route_length << " route length, "s
-                              << std::setprecision(6)
-                              << curvature << " curvature\n";
-                } catch (const std::logic_error& error) {
+                auto bus_info = transport_catalogue.GetBusInfo(bus);
+                if (bus_info) {
+                    out << "Bus "s << bus_info->bus_name << ": "s
+                        << bus_info->stop_count << " stops on route, "s
+                        << bus_info->unique_stop_count << " unique stops, "s
+                        << bus_info->route_length << " route length, "s
+                        << std::setprecision(6)
+                        << bus_info->curvature << " curvature\n";
+                } else {
                     out << "Bus " << bus << ": not found\n";
                 }
             }
 
             void OutStopInfo(std::ostream& out, std::string_view stop, TransportCatalogue& transport_catalogue) {
-                try {
-                    std::unordered_set<std::string_view> buses = transport_catalogue.GetStopInfo(stop);
-                    if (buses.empty()) {
+                auto buses = transport_catalogue.GetStopInfo(stop);
+                if (buses) {
+                    if (buses->empty()) {
                         out << "Stop " << stop << ": no buses\n";
                     } else {
                         out << "Stop " << stop << ": buses ";
-                        std::vector<std::string_view> tmp(buses.size());
-                        std::copy(buses.begin(), buses.end(), tmp.begin());
+                        std::vector<std::string_view> tmp(buses->size());
+                        std::transform(buses->begin(), buses->end(), tmp.begin(), [](Bus* bus){
+                            return bus->bus_name;
+                        });
                         std::sort(tmp.begin(), tmp.end());
                         for (auto& bus : tmp) {
                             out << bus << " ";
                         }
                         out << "\n";
                     }
-                } catch (const std::logic_error& error) {
+                } else {
                     out << "Stop " << stop << ": not found\n";
                 }
             }
