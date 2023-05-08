@@ -142,7 +142,7 @@ namespace transport_catalogue {
             }
 
             for (auto& [bus, stops] : detail::ParseQueryBuses(move(query_bus))) {
-                transport_catalogue.AddBus(bus, stops);
+                transport_catalogue.AddBus(bus, stops, false);
             }
         }
     }
