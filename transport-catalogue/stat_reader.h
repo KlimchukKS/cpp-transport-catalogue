@@ -5,6 +5,8 @@
 #include <iostream>
 #include <string_view>
 
+//чтение запросов на вывод и сам вывод
+
 namespace transport_catalogue {
 
     namespace stat_reader {
