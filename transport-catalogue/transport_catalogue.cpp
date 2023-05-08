@@ -2,6 +2,7 @@
 
 #include <numeric>
 #include <stdexcept>
+#include <algorithm>
 
 namespace transport_catalogue {
 
@@ -15,7 +16,17 @@ namespace transport_catalogue {
         stop_and_stopping_buses_[stops_.front().stop_name];
     }
 
-    void TransportCatalogue::AddBus(std::string& bus, std::vector<std::string>& stops) {
+    void TransportCatalogue::AddStop(std::tuple<std::string , double, double>&& stop) {
+        auto& [name_stop, x, y] = stop;
+
+        stops_.push_front({move(name_stop), {x, y}});
+
+        stopname_to_stop_[stops_.front().stop_name] = &stops_.front();
+
+        stop_and_stopping_buses_[stops_.front().stop_name];
+    }
+
+    void TransportCatalogue::AddBus(std::string& bus, std::vector<std::string>& stops, bool is_roundtrip) {
         std::vector<Stop*> new_stops;
         std::unordered_set<std::string_view> unique_stops;
 
@@ -24,14 +35,14 @@ namespace transport_catalogue {
             unique_stops.insert(stopname_to_stop_[stop]->stop_name);
         }
 
-        buses_.push_front(std::move(Bus{bus, new_stops, unique_stops}));
+        buses_.push_front(std::move(Bus{bus, new_stops, unique_stops, is_roundtrip}));
         busname_to_bus_[buses_.front().bus_name] = &buses_.front();
 
         for (auto stop : buses_.front().stops) {
-            stop_and_stopping_buses_[stop->stop_name].insert(buses_.front().bus_name);
+            stop_and_stopping_buses_[stop->stop_name].insert(&buses_.front());
         }
 
-        for (int i = 0, j = 1; j < busname_to_bus_.at(bus)->stops.size(); ++i, ++j) {
+        for (size_t i = 0, j = 1; j < busname_to_bus_.at(bus)->stops.size(); ++i, ++j) {
             Stop* const lhs = busname_to_bus_.at(bus)->stops[i];
             Stop* const rhs = busname_to_bus_.at(bus)->stops[j];
 
@@ -50,23 +61,48 @@ namespace transport_catalogue {
         stops_distance_[{stopname_to_stop_.at(stop_first), stopname_to_stop_.at(stop_second)}] = distance;
     }
 
-    TransportCatalogue::BusInfo TransportCatalogue::GetBusInfo(std::string_view bus) const {
-        if (!busname_to_bus_.count(bus)) {
-            throw std::logic_error("Bus not found");
+    std::optional<BusInfo> TransportCatalogue::GetBusInfo(std::string_view bus) const {
+        if (busname_to_bus_.count(bus)) {
+            return BusInfo{busname_to_bus_.at(bus)->bus_name,
+                    busname_to_bus_.at(bus)->route_length / busname_to_bus_.at(bus)->geographic_distance,
+                    busname_to_bus_.at(bus)->route_length,
+                    busname_to_bus_.at(bus)->stops.size(),
+                    busname_to_bus_.at(bus)->unique_stops.size()};
         }
-
-        return {busname_to_bus_.at(bus)->bus_name,
-                busname_to_bus_.at(bus)->stops.size(),
-                busname_to_bus_.at(bus)->unique_stops.size(),
-                busname_to_bus_.at(bus)->route_length,
-                busname_to_bus_.at(bus)->route_length / busname_to_bus_.at(bus)->geographic_distance};
+        return std::nullopt;
     }
 
-    std::unordered_set<std::string_view> TransportCatalogue::GetStopInfo(std::string_view stop) const {
-        if (!stop_and_stopping_buses_.count(stop)) {
-            throw std::logic_error("Stop not found");
+    const std::unordered_set<Bus*>* TransportCatalogue::GetStopInfo(std::string_view stop) const {
+        if (stop_and_stopping_buses_.count(stop)) {
+            return &stop_and_stopping_buses_.at(stop);
         }
 
-        return stop_and_stopping_buses_.at(stop);
+        return nullptr;
+    }
+
+    std::vector<const Bus*> TransportCatalogue::GetBuses() const {
+        std::vector<const Bus*> buses(buses_.size());
+
+        std::transform(buses_.begin(), buses_.end(), buses.begin(), [](const Bus& bus){
+            return &bus;
+        });
+
+        std::sort(buses.begin(), buses.end(), [] (const Bus* lhs, const Bus* rhs) {
+            return lhs->bus_name < rhs->bus_name;
+        });
+
+        return buses;
+    }
+
+    std::vector<const Stop*> TransportCatalogue::GetStopsIncludedInRoutes() const {
+        std::vector<const Stop*> stops;
+
+        for (const Stop& stop : stops_) {
+            if (!stop_and_stopping_buses_.at(stop.stop_name).empty()) {
+                stops.push_back(&stop);
+            }
+        }
+
+        return stops;
     }
 }
