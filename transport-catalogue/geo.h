@@ -1,8 +1,8 @@
 #pragma once
 
-#include <cmath>
+namespace geo {
 
-namespace transport_catalogue {
+    static const int kGroundRadius = 6371000;
 
     struct Coordinates {
         double lat;
@@ -15,16 +15,5 @@ namespace transport_catalogue {
         }
     };
 
-    inline double ComputeDistance(Coordinates from, Coordinates to) {
-        using namespace std;
-        if (from == to) {
-            return 0;
-        }
-        static int kGroundRadius = 6371000;
-        static double kPi  = 3.1415926535;
-        static const double kDr = kPi / 180.;
-        return acos(sin(from.lat * kDr) * sin(to.lat * kDr)
-                    + cos(from.lat * kDr) * cos(to.lat * kDr) * cos(abs(from.lng - to.lng) * kDr))
-               * kGroundRadius;
-    }
+    double ComputeDistance(Coordinates from, Coordinates to);
 }
