@@ -33,7 +33,7 @@ namespace json {
 
             BaseContext EndArray();
 
-            BaseContext Value(Node::Value value);
+            BaseContext Value(const Node::Value& value);
 
             Node& Build();
         };
@@ -45,7 +45,7 @@ namespace json {
             ArrayItemContext StartArray() = delete;
             DictItemContext StartDict() = delete;
             BaseContext EndArray() = delete;
-            BaseContext Value(Node::Value value) = delete;
+            BaseContext Value(const Node::Value& value) = delete;
             Node& Build() = delete;
         };
 
@@ -53,7 +53,7 @@ namespace json {
         public:
             ArrayItemContext(BaseContext bc);
 
-            ArrayItemContext Value(Node::Value value);
+            ArrayItemContext Value(const Node::Value& value);
 
             Node& Build() = delete;
             DictItemContext Key(const std::string& key) = delete;
@@ -64,7 +64,7 @@ namespace json {
         public:
             KeyItemContext(BaseContext bc);
 
-            DictValueItemContext Value(Node::Value value);
+            DictValueItemContext Value(const Node::Value& value);
 
             Node& Build() = delete;
             DictItemContext Key(const std::string& key) = delete;
@@ -76,7 +76,7 @@ namespace json {
         public:
             DictValueItemContext(BaseContext bc);
 
-            BaseContext Value(Node::Value value) = delete;
+            BaseContext Value(const Node::Value& value) = delete;
             Node& Build() = delete;
             BaseContext EndArray() = delete;
             ArrayItemContext StartArray() = delete;
@@ -87,7 +87,7 @@ namespace json {
         public:
             ValueItemContext(BaseContext bc);
 
-            BaseContext Value(Node::Value value) = delete;
+            BaseContext Value(const Node::Value& value) = delete;
             DictItemContext Key(const std::string& key) = delete;
             DictItemContext EndDict() = delete;
             BaseContext EndArray() = delete;
@@ -96,7 +96,7 @@ namespace json {
         };
 
     public:
-        BaseContext Value(Node::Value value);
+        BaseContext Value(const Node::Value& value);
 
         DictItemContext StartDict();
 
