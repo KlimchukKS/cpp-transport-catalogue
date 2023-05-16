@@ -27,7 +27,7 @@ namespace renderer {
         vs_ = std::move(vs);
     }
 
-    void MapRenderer::RenderRouteLinesAndName(const SphereProjector& proj, std::vector<const Bus*>& buses) {
+    void MapRenderer::RenderRouteLinesAndName(const SphereProjector& proj, const std::vector<const Bus*>& buses) {
         vector<unique_ptr<svg::Drawable>> route_lines;
         vector<unique_ptr<svg::Drawable>> route_name_text;
 
@@ -65,19 +65,15 @@ namespace renderer {
         DrawPicture(route_name_text, doc_);
     }
 
-    void MapRenderer::Render(std::vector<const Bus*> buses,
-                             std::vector<const Stop*> stops,
-                             std::vector<geo::Coordinates> geo_coords,
+    void MapRenderer::Render(const std::vector<const Bus*>& buses,
+                             const std::vector<const Stop*>& stops,
+                             const std::vector<geo::Coordinates>& geo_coords,
                              std::ostream& out) {
         const SphereProjector proj{
                 geo_coords.begin(), geo_coords.end(), vs_.width, vs_.height, vs_.padding
         };
 
         RenderRouteLinesAndName(proj, buses);
-
-        std::sort(stops.begin(), stops.end(), [] (const Stop* lhs, const Stop* rhs) {
-            return lhs->stop_name < rhs->stop_name;
-        });
 
         vector<unique_ptr<svg::Drawable>> stops_symbols;
         vector<unique_ptr<svg::Drawable>> stops_names;
