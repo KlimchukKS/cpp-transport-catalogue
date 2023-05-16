@@ -14,8 +14,16 @@ const std::unordered_set<RequestHandler::BusPtr>* RequestHandler::GetBusesByStop
 }
 
 void RequestHandler::RenderMap(std::ostream& out) {
+
+    auto stops = db_.GetStopsIncludedInRoutes();
+
+    std::sort(stops.begin(), stops.end(), [] (const transport_catalogue::Stop* lhs,
+                                                             const transport_catalogue::Stop* rhs) {
+        return lhs->stop_name < rhs->stop_name;
+    });
+
     return renderer_.Render(db_.GetBuses(),
-                            db_.GetStopsIncludedInRoutes(),
+                            stops,
                             this->GetGeoCoords(),
                             out);
 }
