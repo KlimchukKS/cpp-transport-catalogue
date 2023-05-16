@@ -25,7 +25,7 @@ namespace json {
         return BaseContext{builder_.EndArray()};
     }
 
-    Builder::BaseContext Builder::BaseContext::Value(Node::Value value) {
+    Builder::BaseContext Builder::BaseContext::Value(const Node::Value& value) {
         return BaseContext{builder_.Value(value)};
     }
 
@@ -39,14 +39,14 @@ namespace json {
     Builder::ArrayItemContext::ArrayItemContext(Builder::BaseContext bc)
             : BaseContext(bc) {}
 
-    Builder::ArrayItemContext Builder::ArrayItemContext::Value(Node::Value value) {
+    Builder::ArrayItemContext Builder::ArrayItemContext::Value(const Node::Value& value) {
         return Builder::BaseContext::Value(value);
     }
 
     Builder::KeyItemContext::KeyItemContext(Builder::BaseContext bc)
             : BaseContext(bc) {}
 
-    Builder::DictValueItemContext Builder::KeyItemContext::Value(Node::Value value) {
+    Builder::DictValueItemContext Builder::KeyItemContext::Value(const Node::Value& value) {
         return BaseContext::Value(value);
     }
 
@@ -56,7 +56,7 @@ namespace json {
     Builder::ValueItemContext::ValueItemContext(Builder::BaseContext bc)
             : BaseContext(bc) {}
 
-    Builder::BaseContext Builder::Value(Node::Value value) {
+    Builder::BaseContext Builder::Value(const Node::Value& value) {
         if (is_complite) {
             throw std::logic_error("");
         }
