@@ -209,16 +209,16 @@ namespace renderer {
     public:
         void SetVisualizationSettings(VisualizationSettings&& vs);
 
-        void Render(std::vector<const transport_catalogue::Bus*> buses,
-                    std::vector<const transport_catalogue::Stop*> stops,
-                    std::vector<geo::Coordinates> geo_coords,
+        void Render(const std::vector<const transport_catalogue::Bus*>& buses,
+                    const std::vector<const transport_catalogue::Stop*>& stops,
+                    const std::vector<geo::Coordinates>& geo_coords,
                     std::ostream& out);
 
     private:
         VisualizationSettings vs_;
         svg::Document doc_;
 
-        void RenderRouteLinesAndName(const SphereProjector& proj, std::vector<const transport_catalogue::Bus*>& buses);
+        void RenderRouteLinesAndName(const SphereProjector& proj, const std::vector<const transport_catalogue::Bus*>& buses);
 
         template <typename DrawableIterator>
         void DrawPicture(DrawableIterator begin, DrawableIterator end, svg::ObjectContainer& target) const {
