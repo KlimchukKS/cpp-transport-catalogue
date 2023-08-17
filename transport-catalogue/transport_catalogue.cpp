@@ -65,7 +65,7 @@ namespace transport_catalogue {
         if (busname_to_bus_.count(bus)) {
             return BusInfo{busname_to_bus_.at(bus)->bus_name,
                     busname_to_bus_.at(bus)->route_length / busname_to_bus_.at(bus)->geographic_distance,
-                    busname_to_bus_.at(bus)->route_length,
+                           double(busname_to_bus_.at(bus)->route_length),
                     busname_to_bus_.at(bus)->stops.size(),
                     busname_to_bus_.at(bus)->unique_stops.size()};
         }
