@@ -29,8 +29,29 @@ namespace transport_catalogue {
     struct BusInfo {
         std::string_view bus_name;
         double curvature;
-        int route_length;
+        double route_length;
         size_t stop_count;
         size_t unique_stop_count;
     };
 }
+
+struct Item {
+    std::string_view name;
+    int span_count;
+    double time;
+
+    enum class Type {
+        kBus,
+        kWait,
+    };
+
+    Type item_type;
+};
+
+struct Route {
+    double total_time;
+
+    std::vector<Item> items;
+};
+
+
