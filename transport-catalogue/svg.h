@@ -276,6 +276,8 @@ namespace svg {
 
         // Выводит в ostream svg-представление документа
         void Render(std::ostream& out) const;
+
+        // Прочие методы и данные, необходимые для реализации класса Document
     };
 
 }  // namespace svg
