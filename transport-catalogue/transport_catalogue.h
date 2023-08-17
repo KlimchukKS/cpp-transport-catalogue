@@ -11,6 +11,8 @@
 #include <unordered_set>
 #include <optional>
 
+//класс транспортного справочника
+
 namespace transport_catalogue {
 
     class TransportCatalogue {
@@ -53,5 +55,18 @@ namespace transport_catalogue {
         std::vector<const Bus*> GetBuses() const;
 
         std::vector<const Stop*> GetStopsIncludedInRoutes() const;
+
+        size_t GetStopsCount() const {
+            return stop_and_stopping_buses_.size();
+        };
+
+        std::optional<double> GetDistanceBetweenTwoStops(std::pair<std::string_view, std::string_view> stops) const {
+            auto& [lhs, rhs] = stops;
+            if (stops_distance_.count({stopname_to_stop_.at(lhs), stopname_to_stop_.at(rhs)})) {
+                return stops_distance_.at({stopname_to_stop_.at(lhs), stopname_to_stop_.at(rhs)});
+            }
+
+            return std::nullopt;
+        }
     };
 }
