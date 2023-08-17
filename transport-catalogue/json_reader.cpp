@@ -2,7 +2,6 @@
 
 #include "domain.h"
 #include "request_handler.h"
-#include "json_builder.h"
 
 #include <unordered_map>
 #include <string>
@@ -14,6 +13,101 @@
 
 using namespace transport_catalogue;
 using namespace std;
+
+void MapStatRequest::Print(json::Builder& builder) const {
+    RequestHandler rh(db_, renderer_);
+    std::stringstream strm;
+    rh.RenderMap(strm);
+
+    builder.StartDict()
+          .Key("map"s).Value(strm.str())
+          .Key("request_id"s).Value(id_).EndDict();
+}
+
+json::Array StopStatRequest::GetBusNames(const unordered_set<Bus*>* stop_buses) const {
+    std::vector<std::string> tmp(stop_buses->size());
+    std::transform(stop_buses->begin(), stop_buses->end(), tmp.begin(), [](Bus* bus){
+        return bus->bus_name;
+    });
+    std::sort(tmp.begin(), tmp.end());
+
+    json::Array buses;
+
+    for (auto& bus : tmp) {
+        buses.emplace_back(bus);
+    }
+
+    return buses;
+}
+
+void StopStatRequest::Print(json::Builder& builder) const {
+    auto stop_buses = db_.GetStopInfo(stop_name_);
+    if (stop_buses) {
+        builder.StartDict()
+                .Key("buses"s).Value(GetBusNames(stop_buses))
+                .Key("request_id"s).Value(id_)
+                .EndDict();
+    } else {
+        builder.StartDict()
+                .Key("error_message"s).Value("not found"s)
+                .Key("request_id"s).Value(id_)
+                .EndDict();
+    }
+}
+
+void BusStatRequest::Print(json::Builder& builder) const {
+    auto bus_info = db_.GetBusInfo(route_name_);
+    if (bus_info) {
+        builder.StartDict()
+                .Key("request_id"s).Value(id_)
+                .Key("curvature"s).Value(bus_info->curvature)
+                .Key("route_length"s).Value(bus_info->route_length)
+                .Key("stop_count"s).Value(int(bus_info->stop_count))
+                .Key("unique_stop_count"s).Value(int(bus_info->unique_stop_count))
+                .EndDict();
+    } else {
+        builder.StartDict()
+                .Key("error_message"s).Value("not found"s)
+                .Key("request_id"s).Value(id_)
+                .EndDict();
+    }
+}
+
+void RoutingStatRequest::Print(json::Builder& builder) const {
+    if (!route_) {
+        builder.StartDict()
+                .Key("error_message"s).Value("not found"s)
+                .Key("request_id"s).Value(id_)
+                .EndDict();
+        return;
+    }
+
+    builder.StartDict().Key("items"s).StartArray();
+
+    for (const auto& item : route_->items) {
+        switch (item.item_type) {
+            case Item::Type::kWait :
+                builder.StartDict()
+                        .Key("type"s).Value("Wait"s)
+                        .Key("time"s).Value(item.time)
+                        .Key("stop_name"s).Value(std::string(item.name))
+                        .EndDict();
+                break;
+            case Item::Type::kBus:
+                builder.StartDict()
+                        .Key("type"s).Value("Bus"s)
+                        .Key("span_count"s).Value(item.span_count)
+                        .Key("time"s).Value(item.time)
+                        .Key("bus"s).Value(std::string(item.name))
+                        .EndDict();
+        }
+    }
+
+    builder.EndArray()
+            .Key("request_id"s).Value(id_)
+            .Key("total_time"s).Value(route_->total_time)
+            .EndDict();
+}
 
 JsonReader::JsonReader(transport_catalogue::TransportCatalogue& db, renderer::MapRenderer& r)
         : db_(db), renderer_(r) {}
@@ -60,91 +154,36 @@ void JsonReader::ParseBaseRequests(const json::Node& input_node) {
 }
 
 void JsonReader::ParseStatRequests(const json::Node& input_node) {
+    const RouteBuilder& route_builder = ParseRoutingSettingsAndGetRouteBuilder(input_node);
+
     for (auto& map_requests : input_node.AsDict().at("stat_requests").AsArray()) {
         if (map_requests.AsDict().at("type"s) == "Stop"s) {
-            requests_data_.push_back({map_requests.AsDict().at("id"s).AsInt(),
-                                      RequestType::kStop,
-                                      map_requests.AsDict().at("name"s).AsString()});
+            requests_data_.push_back(std::make_unique<StopStatRequest>(map_requests.AsDict().at("id"s).AsInt(),
+                                                                       map_requests.AsDict().at("name"s).AsString(),
+                                                                       db_));
         } else if (map_requests.AsDict().at("type"s) == "Bus"s) {
-            requests_data_.push_back({map_requests.AsDict().at("id"s).AsInt(),
-                                      RequestType::kBus,
-                                      map_requests.AsDict().at("name"s).AsString()});
+            requests_data_.push_back(std::make_unique<BusStatRequest>(map_requests.AsDict().at("id"s).AsInt(),
+                                                                       map_requests.AsDict().at("name"s).AsString(),
+                                                                       db_));
         } else if (map_requests.AsDict().at("type"s) == "Map"s) {
-            requests_data_.push_back({map_requests.AsDict().at("id"s).AsInt(),
-                                      RequestType::kMap, {}});
+            requests_data_.push_back(std::make_unique<MapStatRequest>(map_requests.AsDict().at("id"s).AsInt(),
+                                                                      db_,
+                                                                      renderer_));
+        } else if (map_requests.AsDict().at("type"s) == "Route"s) {
+            requests_data_.push_back(std::make_unique<RoutingStatRequest>(map_requests.AsDict().at("id"s).AsInt(),
+                    std::move(route_builder.GetRout(map_requests.AsDict().at("from"s).AsString(),
+                                                    map_requests.AsDict().at("to"s).AsString()))));
         }
     }
 }
 
-json::Array JsonReader::GetBusNames(const unordered_set<Bus*>* stop_buses) const {
-    std::vector<std::string> tmp(stop_buses->size());
-    std::transform(stop_buses->begin(), stop_buses->end(), tmp.begin(), [](Bus* bus){
-        return bus->bus_name;
-    });
-    std::sort(tmp.begin(), tmp.end());
-
-    json::Array buses;
-
-    for (auto& bus : tmp) {
-        buses.emplace_back(bus);
-    }
-
-    return buses;
-}
-
 void JsonReader::OutStatRequests(std::ostream& out) {
-    RequestHandler rh(db_, renderer_);
-
     auto stat_requests = json::Builder{};
 
     stat_requests.StartArray();
 
-    std::stringstream strm;
-
-    for (auto& data : requests_data_) {
-        const unordered_set<Bus*>* stop_buses;
-        std::optional<BusInfo> bus_info;
-        switch (data.type) {
-            case RequestType::kStop:
-                stop_buses = db_.GetStopInfo(data.name);
-                if (stop_buses) {
-                    stat_requests.StartDict()
-                            .Key("buses"s).Value(GetBusNames(stop_buses))
-                            .Key("request_id"s).Value(data.id)
-                            .EndDict();
-                } else {
-                    stat_requests.StartDict()
-                            .Key("error_message"s).Value("not found"s)
-                            .Key("request_id"s).Value(data.id)
-                            .EndDict();
-                }
-                break;
-            case RequestType::kBus:
-                bus_info = db_.GetBusInfo(data.name);
-                if (bus_info) {
-                    stat_requests.StartDict()
-                            .Key("request_id"s).Value(data.id)
-                            .Key("curvature"s).Value(bus_info->curvature)
-                            .Key("route_length"s).Value(bus_info->route_length)
-                            .Key("stop_count"s).Value(int(bus_info->stop_count))
-                            .Key("unique_stop_count"s).Value(int(bus_info->unique_stop_count))
-                            .EndDict();
-                } else {
-                    stat_requests.StartDict()
-                            .Key("error_message"s).Value("not found"s)
-                            .Key("request_id"s).Value(data.id)
-                            .EndDict();
-                }
-                break;
-            case RequestType::kMap:
-                rh.RenderMap(strm);
-
-                stat_requests.StartDict()
-                        .Key("map"s).Value(strm.str())
-                        .Key("request_id"s).Value(data.id)
-                        .EndDict();
-                break;
-        }
+    for (auto& request : requests_data_) {
+        request->Print(stat_requests);
     }
 
     json::Print(json::Document{stat_requests.EndArray().Build()}, out);
@@ -198,6 +237,16 @@ renderer::VisualizationSettings JsonReader::ParseRenderSettings(const json::Node
     }
 
     return vs;
+}
+
+RouteBuilder JsonReader::ParseRoutingSettingsAndGetRouteBuilder(const json::Node& input_node) {
+    auto& render_settings = input_node.AsDict().at("routing_settings"s).AsDict();
+
+    RouteBuilder route_builder(db_,
+            render_settings.at("bus_velocity"s).AsDouble(),
+            render_settings.at("bus_wait_time"s).AsDouble());
+
+    return route_builder;
 }
 
 void JsonReader::ParseJSON(std::istream &input) {
