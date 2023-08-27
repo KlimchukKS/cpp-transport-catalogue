@@ -17,4 +17,4 @@ namespace geo {
                * kGroundRadius;
     }
 
-}  // namespace geo
+}
