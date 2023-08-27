@@ -1,7 +1,5 @@
 #include "serialization.h"
 
-//Понимаю что можно все разделить по фонкциям, но я очень старался успеть к дедлайну
-
 transport_catalogue_serialize::Color GetColor(svg::Color& col) {
     transport_catalogue_serialize::Color ser_col;
     if (std::holds_alternative<std::string>(col)) {
@@ -28,9 +26,33 @@ transport_catalogue_serialize::Color GetColor(svg::Color& col) {
     return ser_col;
 }
 
-void Serialize(const std::filesystem::path& path, serialization_data::SerializationData&& s_data) {
-    std::ofstream out_file(path, std::ios::binary);
+transport_catalogue_serialize::VisualizationSettings SerializeVisualizationSettings(renderer::VisualizationSettings& vs_data) {
+    transport_catalogue_serialize::VisualizationSettings vs;
 
+    vs.set_width(vs_data.width);
+    vs.set_height(vs_data.height);
+    vs.set_padding(vs_data.padding);
+    vs.set_line_width(vs_data.line_width);
+    vs.set_stop_radius(vs_data.stop_radius);
+    vs.set_underlayer_width(vs_data.underlayer_width);
+    vs.set_bus_label_font_size(vs_data.bus_label_font_size);
+    vs.set_stop_label_font_size(vs_data.stop_label_font_size);
+
+    vs.add_bus_label_offset(vs_data.bus_label_offset.x);
+    vs.add_bus_label_offset(vs_data.bus_label_offset.y);
+    vs.add_stop_label_offset(vs_data.stop_label_offset.x);
+    vs.add_stop_label_offset(vs_data.stop_label_offset.y);
+
+    *vs.mutable_underlayer_color() = GetColor(vs_data.underlayer_color);
+
+    for (auto& c : vs_data.color_palette) {
+        *vs.add_color_palette() = std::move(GetColor(c));
+    }
+
+    return vs;
+}
+
+transport_catalogue_serialize::TransportCatalogue SerializeTransportCatalogue(serialization_data::SerializationData& s_data) {
     transport_catalogue_serialize::TransportCatalogue tc;
 
     for (auto& [id, name]  : s_data.name_repository) {
@@ -67,33 +89,17 @@ void Serialize(const std::filesystem::path& path, serialization_data::Serializat
         *tc.add_buses() = std::move(bus);
     }
 
+    return tc;
+}
+
+void Serialize(const std::filesystem::path& path, serialization_data::SerializationData&& s_data) {
+    std::ofstream out_file(path, std::ios::binary);
+
     transport_catalogue_serialize::SerializationSetting ss;
 
-    *ss.mutable_transport_catalogue() = std::move(tc);
+    *ss.mutable_transport_catalogue() = std::move(SerializeTransportCatalogue(s_data));
 
-    transport_catalogue_serialize::VisualizationSettings vs;
-
-    vs.set_width(s_data.vs.width);
-    vs.set_height(s_data.vs.height);
-    vs.set_padding(s_data.vs.padding);
-    vs.set_line_width(s_data.vs.line_width);
-    vs.set_stop_radius(s_data.vs.stop_radius);
-    vs.set_underlayer_width(s_data.vs.underlayer_width);
-    vs.set_bus_label_font_size(s_data.vs.bus_label_font_size);
-    vs.set_stop_label_font_size(s_data.vs.stop_label_font_size);
-
-    vs.add_bus_label_offset(s_data.vs.bus_label_offset.x);
-    vs.add_bus_label_offset(s_data.vs.bus_label_offset.y);
-    vs.add_stop_label_offset(s_data.vs.stop_label_offset.x);
-    vs.add_stop_label_offset(s_data.vs.stop_label_offset.y);
-
-    *vs.mutable_underlayer_color() = GetColor(s_data.vs.underlayer_color);
-
-    for (auto& c : s_data.vs.color_palette) {
-        *vs.add_color_palette() = std::move(GetColor(c));
-    }
-
-    *ss.mutable_vs() = std::move(vs);
+    *ss.mutable_vs() = std::move(SerializeVisualizationSettings(s_data.vs));
 
     transport_catalogue_serialize::RouteSettings rs;
 
@@ -122,17 +128,7 @@ svg::Color DeserializeGetColor(transport_catalogue_serialize::Color& c) {
     return color;
 }
 
-serialization_data::SerializationData Deserialize(const std::filesystem::path& path) {
-    std::ifstream in_file(path, std::ios::binary);
-
-    transport_catalogue_serialize::SerializationSetting ss;
-
-    if (!ss.ParseFromIstream(&in_file)) {
-        throw;
-    }
-
-    transport_catalogue_serialize::TransportCatalogue tc = std::move(*ss.mutable_transport_catalogue());
-
+serialization_data::SerializationData DeserializeTransportCatalogue(transport_catalogue_serialize::TransportCatalogue& tc) {
     serialization_data::SerializationData s_data;
 
     int size = tc.name_repository_size();
@@ -179,30 +175,50 @@ serialization_data::SerializationData Deserialize(const std::filesystem::path& p
         s_data.buses.push_back(std::move(bus_tmp));
     }
 
-    transport_catalogue_serialize::VisualizationSettings vs = std::move(*ss.mutable_vs());
+    return s_data;
+}
 
-    s_data.vs.width = vs.width();
-    s_data.vs.height = vs.height();
-    s_data.vs.padding = vs.padding();
-    s_data.vs.line_width = vs.line_width();
-    s_data.vs.stop_radius = vs.stop_radius();
-    s_data.vs.underlayer_width = vs.underlayer_width();
-    s_data.vs.bus_label_font_size = vs.bus_label_font_size();
-    s_data.vs.stop_label_font_size = vs.stop_label_font_size();
+renderer::VisualizationSettings DeserializeVisualizationSettings(transport_catalogue_serialize::VisualizationSettings vs) {
+    renderer::VisualizationSettings des_vs;
 
-    s_data.vs.bus_label_offset.x = vs.bus_label_offset(0);
-    s_data.vs.bus_label_offset.y = vs.bus_label_offset(1);
+    des_vs.width = vs.width();
+    des_vs.height = vs.height();
+    des_vs.padding = vs.padding();
+    des_vs.line_width = vs.line_width();
+    des_vs.stop_radius = vs.stop_radius();
+    des_vs.underlayer_width = vs.underlayer_width();
+    des_vs.bus_label_font_size = vs.bus_label_font_size();
+    des_vs.stop_label_font_size = vs.stop_label_font_size();
 
-    s_data.vs.stop_label_offset.x = vs.stop_label_offset(0);
-    s_data.vs.stop_label_offset.y = vs.stop_label_offset(1);
+    des_vs.bus_label_offset.x = vs.bus_label_offset(0);
+    des_vs.bus_label_offset.y = vs.bus_label_offset(1);
 
-    s_data.vs.underlayer_color = DeserializeGetColor(*vs.mutable_underlayer_color());
+    des_vs.stop_label_offset.x = vs.stop_label_offset(0);
+    des_vs.stop_label_offset.y = vs.stop_label_offset(1);
 
-    size = vs.color_palette_size();
+    des_vs.underlayer_color = DeserializeGetColor(*vs.mutable_underlayer_color());
+
+    int size = vs.color_palette_size();
 
     for (int i = 0; i < size; ++i) {
-        s_data.vs.color_palette.push_back(DeserializeGetColor(*vs.mutable_color_palette(i)));
+        des_vs.color_palette.push_back(DeserializeGetColor(*vs.mutable_color_palette(i)));
     }
+
+    return des_vs;
+}
+
+serialization_data::SerializationData Deserialize(const std::filesystem::path& path) {
+    std::ifstream in_file(path, std::ios::binary);
+
+    transport_catalogue_serialize::SerializationSetting ss;
+
+    if (!ss.ParseFromIstream(&in_file)) {
+        throw;
+    }
+
+    serialization_data::SerializationData s_data = DeserializeTransportCatalogue(*ss.mutable_transport_catalogue());
+
+    s_data.vs = std::move(DeserializeVisualizationSettings(*ss.mutable_vs()));
 
     transport_catalogue_serialize::RouteSettings rs = std::move(*ss.mutable_rs());
 
