@@ -80,21 +80,6 @@ namespace renderer {
         double zoom_coeff_ = 0;
     };
 
-    struct VisualizationSettings {
-        double width;
-        double height;
-        double padding;
-        double line_width;
-        double stop_radius;
-        int bus_label_font_size;
-        svg::Point bus_label_offset;
-        int stop_label_font_size;
-        svg::Point stop_label_offset;
-        svg::Color underlayer_color;
-        double underlayer_width;
-        std::vector<svg::Color> color_palette;
-    };
-
     class Route : public svg::Drawable {
     public:
         Route(std::vector<svg::Point> p, double width, svg::Color route_color);
