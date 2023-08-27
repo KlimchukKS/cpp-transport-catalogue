@@ -80,13 +80,19 @@ public:
     void Print(json::Builder& builder) const override;
 };
 
+
+
 class JsonReader {
 public:
     JsonReader(transport_catalogue::TransportCatalogue& db, renderer::MapRenderer& r);
 
-    void ParseJSON(std::istream &input);
+    //void ParseJSON(std::istream &input);
 
     void OutStatRequests(std::ostream& out);
+
+    std::pair<std::string, serialization_data::SerializationData> ParseJSONtoGetDataForSerialization(std::istream &input);
+
+    void ParseJsonProcessRequests(std::istream &input);
 
 private:
     transport_catalogue::TransportCatalogue& db_;
@@ -97,11 +103,13 @@ private:
 
     void ParseBaseRequests(const json::Node& input_node);
 
-    void ParseStatRequests(const json::Node& input_node);
+    void ParseStatRequests(const json::Node& input_node, serialization_data::RouteSettings rs);
 
     renderer::VisualizationSettings ParseRenderSettings(const json::Node& input_node);
 
     svg::Color GetColor(const json::Node& node);
 
     RouteBuilder ParseRoutingSettingsAndGetRouteBuilder(const json::Node& input_node);
+
+    serialization_data::RouteSettings ParseDeserializeData(serialization_data::SerializationData&& data);
 };
