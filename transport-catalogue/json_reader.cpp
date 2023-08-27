@@ -3,6 +3,8 @@
 #include "domain.h"
 #include "request_handler.h"
 
+#include "serialization.h"
+
 #include <string>
 #include <vector>
 #include <utility>
@@ -151,8 +153,10 @@ void JsonReader::ParseBaseRequests(const json::Node& input_node) {
     }
 }
 
-void JsonReader::ParseStatRequests(const json::Node& input_node) {
-    const RouteBuilder& route_builder = ParseRoutingSettingsAndGetRouteBuilder(input_node);
+void JsonReader::ParseStatRequests(const json::Node& input_node, serialization_data::RouteSettings rs) {
+    //const RouteBuilder& route_builder = ParseRoutingSettingsAndGetRouteBuilder(input_node);
+
+    const RouteBuilder route_builder(db_, rs.bus_velocity, rs.bus_wait_time);
 
     for (auto& map_requests : input_node.AsDict().at("stat_requests").AsArray()) {
         if (map_requests.AsDict().at("type"s) == "Stop"s) {
@@ -246,7 +250,7 @@ RouteBuilder JsonReader::ParseRoutingSettingsAndGetRouteBuilder(const json::Node
 
     return route_builder;
 }
-
+/*
 void JsonReader::ParseJSON(std::istream &input) {
     const json::Document input_document = json::Load(input);
 
@@ -255,4 +259,145 @@ void JsonReader::ParseJSON(std::istream &input) {
     this->ParseStatRequests(input_document.GetRoot());
 
     renderer_.SetVisualizationSettings(std::move(ParseRenderSettings(input_document.GetRoot())));
+}
+*/
+std::pair<std::string, serialization_data::SerializationData> JsonReader::ParseJSONtoGetDataForSerialization(std::istream &input) {
+    const json::Document input_document = json::Load(input);
+    const auto& input_node = input_document.GetRoot();
+
+    std::unordered_map<std::string_view, uint32_t> name_id;
+    std::unordered_map<uint32_t, std::string> name_rep;
+
+    serialization_data::SerializationData serialization_data;
+
+    uint32_t counter = 0;
+
+    for (const auto& node : input_node.AsDict().at("base_requests").AsArray()) {
+        auto map_stops_and_buses = node.AsDict();
+        if (map_stops_and_buses.at("type"s) == "Stop") {
+            serialization_data::Stop stop;
+            {// Дополнительное вложение нужно, чтобы убрать переменную name_stop. Так меньше шансов присвоить её, куда-то не туда.
+                string_view name_stop = map_stops_and_buses.at("name"s).AsString();
+
+                if (!name_id.count(name_stop)) {
+                    name_rep[counter] = name_stop;
+                    name_id[name_rep[counter]] = counter;
+                    ++counter;
+                }
+
+                stop.name = name_id[name_stop];
+            }
+            stop.coordinates.lat = map_stops_and_buses.at("latitude"s).AsDouble();
+            stop.coordinates.lng = map_stops_and_buses.at("longitude"s).AsDouble();
+
+            for (const auto& [to_stop, distances] : map_stops_and_buses.at("road_distances").AsDict()) {
+                if (!name_id.count(to_stop)) {
+                    name_rep[counter] = to_stop;
+                    name_id[name_rep[counter]] = counter;
+                    ++counter;
+                }
+
+                stop.road_distances.push_back({name_id[to_stop],
+                                               distances.AsInt()});
+            }
+
+            serialization_data.stops.push_back(std::move(stop));
+        } else {
+            serialization_data::Bus bus;
+            {
+                string_view name_bus = map_stops_and_buses.at("name"s).AsString();
+                if (!name_id.count(name_bus)) {
+                    name_rep[counter] = name_bus;
+                    name_id[name_rep[counter]] = counter;
+                    ++counter;
+                }
+                bus.name = name_id[name_bus];
+            }
+
+            std::vector<uint32_t> stops;
+            for (auto& node_str : map_stops_and_buses.at("stops"s).AsArray()) {
+                string_view name_stop = node_str.AsString();
+                if (!name_id.count(name_stop)) {
+                    name_rep[counter] = name_stop;
+                    name_id[name_rep[counter]] = counter;
+                    ++counter;
+                }
+                stops.push_back(name_id[name_stop]);
+            }
+
+            bus.is_roundtrip = map_stops_and_buses.at("is_roundtrip"s).AsBool();
+
+            if (!bus.is_roundtrip) {
+                std::vector<uint32_t> tmp = {stops.begin(), stops.end() - 1};
+                tmp.insert(tmp.end(), stops.rbegin(), stops.rend());
+                bus.stops = std::move(tmp);
+            } else {
+                bus.stops = std::move(stops);
+            }
+            serialization_data.buses.push_back(std::move(bus));
+        }
+    }
+
+    std::vector<std::pair<uint32_t, std::string>> tmp{name_rep.begin(), name_rep.end()};
+    serialization_data.name_repository = std::move(tmp);
+
+    std::string serialization_setting = input_node.AsDict().at("serialization_settings").AsDict().at("file").AsString();
+
+    serialization_data.vs = ParseRenderSettings(input_node);
+
+    auto& render_settings = input_node.AsDict().at("routing_settings"s).AsDict();
+    serialization_data.route_settings.bus_velocity = render_settings.at("bus_velocity"s).AsDouble();
+    serialization_data.route_settings.bus_wait_time = render_settings.at("bus_wait_time"s).AsDouble();
+
+    return {serialization_setting, serialization_data};
+}
+
+serialization_data::RouteSettings JsonReader::ParseDeserializeData(serialization_data::SerializationData&& data) {
+    std::unordered_map<uint32_t, std::string> id_names(data.name_repository.begin(), data.name_repository.end());
+
+    vector<tuple<string, int, string>> stop_distance_to_stop;
+    std::vector<std::tuple<std::string, std::vector<std::string>, bool>> buses_and_stops;
+
+    for (auto& [name, coord, r_d] : data.stops) {
+        db_.AddStop({id_names[name],
+                     coord.lat,
+                     coord.lng});
+        for (auto [to_stop, distances] : r_d) {
+            stop_distance_to_stop.push_back({id_names[name], distances, id_names[to_stop]});
+        }
+    }
+
+    for (auto& [name, stops_id, is_roundtrip] : data.buses) {
+        vector<string> stops;
+        for (auto& node_str : stops_id) {
+            stops.push_back(id_names[node_str]);
+        }
+
+        buses_and_stops.push_back({id_names[name], move(stops), is_roundtrip});
+    }
+
+    for (auto& sds : stop_distance_to_stop) {
+        db_.SetDistanceBetweenStops(sds);
+    }
+
+    for (auto& [bus, stops, is_roundtrip] : buses_and_stops) {
+        db_.AddBus(bus, stops, is_roundtrip);
+    }
+
+    renderer_.SetVisualizationSettings(std::move(data.vs));
+
+    serialization_data::RouteSettings rs = data.route_settings;
+
+    return rs;
+}
+
+void JsonReader::ParseJsonProcessRequests(std::istream &input) {
+    const json::Document input_document = json::Load(input);
+    const auto& input_node = input_document.GetRoot();
+
+    std::string serialization_setting = input_node.AsDict().at("serialization_settings").AsDict().at("file").AsString();
+
+    auto rs = ParseDeserializeData(std::move(Deserialize(serialization_setting)));
+
+    this->ParseStatRequests(input_document.GetRoot(), rs);
 }
